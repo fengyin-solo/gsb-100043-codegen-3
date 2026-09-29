@@ -14,6 +14,11 @@ class Store:
         self._tables: dict[str, list[dict[str, Any]]] = {
             name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
         }
+        # 业务状态：温控监测断点续传与接口熔断标记
+        self._state: dict[str, Any] = {
+            "temp_monitor_checkpoint": 0,
+            "temp_monitor_interface": "normal",  # normal | interrupted
+        }
 
     def module_names(self) -> list[str]:
         return sorted(self._tables)
@@ -26,6 +31,12 @@ class Store:
             if int(row.get("id", 0)) == entry_id:
                 return row
         return None
+
+    def state(self, key: str) -> Any:
+        return self._state.get(key)
+
+    def set_state(self, key: str, value: Any) -> None:
+        self._state[key] = value
 
     def overview(self) -> dict[str, object]:
         modules: list[dict[str, object]] = []
