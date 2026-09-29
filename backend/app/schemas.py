@@ -28,6 +28,30 @@ class EntryPayload(BaseModel):
     remark: str | None = None
 
 
+class TempIngestPayload(BaseModel):
+    """设备/接口批量上报的温度记录。seq 为流内全局递增序号，用作断点。"""
+
+    records: list[dict[str, Any]] = Field(default_factory=list)
+    stream: str = "default"
+    fail_after: int | None = None
+
+
+class TempIngestResult(BaseModel):
+    """接入结果：含断点序号，中断时把断点带回去，恢复后从这里继续。"""
+
+    ok: bool = True
+    stream: str = "default"
+    checkpoint: int = 0
+    processed: int = 0
+    ingested: int = 0
+    updated: int = 0
+    skipped: int = 0
+    new_alarms: int = 0
+    open_over_temp_alarms: int = 0
+    interrupted: bool = False
+    message: str = ""
+
+
 
 class ShipmentEntry(BaseModel):
     """发运单明细结构。"""

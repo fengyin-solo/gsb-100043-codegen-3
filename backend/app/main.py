@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import ROUTERS
+from app.routers.temp_monitor import service as temp_monitor_service
 from app.store import store
 
 app = FastAPI(title="冷链物流温控管理平台", version="1.0.0")
@@ -21,6 +22,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def bootstrap_temp_rules() -> None:
+    """启动时对种子温度记录统一跑多级超温规则，让看板、明细、报警待办初始即一致。"""
+    temp_monitor_service.bootstrap()
+
 
 for module in ROUTERS:
     app.include_router(module.router)

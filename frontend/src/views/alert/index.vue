@@ -6,13 +6,12 @@
         <p class="page-desc">维护报警记录，围绕报警编号、报警类型、关联设备、报警阈值做登记、筛选与状态流转。</p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记报警记录</button>
         <button class="btn" type="button" @click="exportRows">导出报警管理清单</button>
       </div>
     </header>
 
     <div class="stat-row">
-      <article v-for="item in stats" :key="item.label" class="stat-card">
+      <article v-for="item in statCards" :key="item.label" class="stat-card">
         <span class="stat-label">{{ item.label }}</span>
         <strong class="stat-value">{{ item.value }}</strong>
       </article>
@@ -63,23 +62,34 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { request } from '@/api/client'
 
 type Row = Record<string, string | number | null>
 
 const ENDPOINT = '/api/alert'
-const columns = ["报警编号", "报警类型", "关联设备", "报警阈值", "触发值", "触发时间", "处置措施", "报警状态"]
+const columns = ["报警编号", "报警类型", "关联设备", "报警阈值", "触发值", "触发时间", "处置措施", "来源记录编号", "报警状态"]
 const actions = ["确认报警", "开始处理", "消除报警"]
 const statuses = ["未处理", "已确认", "处理中", "已消除"]
-const stats = [{"label": "未处理报警", "value": 0}, {"label": "处理中报警", "value": 0}, {"label": "今日消除", "value": 0}]
 
 const rows = ref<Row[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+
+// 统计直接来自当前列表（size 放大到 200 拉全量），与待办明细同源。
+const statCards = computed(() => {
+  const count = (status: string) => rows.value.filter((row) => row.status === status).length
+  const tempOpen = rows.value.filter((row) => row['来源记录编号'] && row.status !== '已消除').length
+  return [
+    { label: '未处理报警', value: count('未处理') },
+    { label: '处理中报警', value: count('已确认') + count('处理中') },
+    { label: '超温待办', value: tempOpen },
+    { label: '今日消除', value: count('已消除') },
+  ]
+})
 
 function resetFilters() {
   filters.value = {}
@@ -90,19 +100,16 @@ function exportRows() {
   window.open(`${ENDPOINT}/export`, '_blank')
 }
 
-function openCreate() {
-  errorMessage.value = '报警记录登记入口尚未接入审批流'
-}
-
 async function runAction(action: string, row: Row) {
   errorMessage.value = ''
   try {
     const response = await request(`${ENDPOINT}/${row.id}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: { action } }),
     })
-    if (!response.ok) {
-      throw new Error('报警管理动作未生效，请稍后重试')
+    const payload = await response.json()
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || '报警管理动作未生效，请稍后重试')
     }
     await reload()
   } catch (error) {
@@ -112,7 +119,7 @@ async function runAction(action: string, row: Row) {
 
 async function reload() {
   errorMessage.value = ''
-  const query = new URLSearchParams(filters.value as Record<string, string>).toString()
+  const query = new URLSearchParams({ ...(filters.value as Record<string, string>), size: '200' }).toString()
   try {
     const response = await request(`${ENDPOINT}?${query}`)
     if (!response.ok) {
